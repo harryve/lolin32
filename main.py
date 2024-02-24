@@ -48,11 +48,9 @@ try:
 
     t_nwk_connected = time.ticks_ms()
 
-    print("Connection successful", wlan.status('rssi'), t_nwk_connected)
+    #print("Connection successful", wlan.status('rssi'), t_nwk_connected)
 
     mqtt_server = 'mqtt.harry.thuis'
-    #mqtt_server = '192.168.62.99'
-    #print("Connect to mqtt broker")
     client = MQTTClient("umqtt_client", mqtt_server)
 
     client.connect()
@@ -76,4 +74,4 @@ except Exception as e:
     print(e)
 
 #print("Welterusten")        
-machine.deepsleep(60000)
+machine.deepsleep(5*60000)
