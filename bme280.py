@@ -96,45 +96,18 @@ class Device:
       result -= 256
     return result
 
-  def readU16(self, register, little_endian=True):
-    """Read an unsigned 16-bit value from the specified register, with the
-    specified endianness (default little endian, or least significant byte
-    first)."""
+  def readU16(self, register):
+    """Read an unsigned 16-bit value from the specified register"""
     result = int.from_bytes(
         self._i2c.readfrom_mem(self._address, register, 2),'little') & 0xFFFF
-    if not little_endian:
-      result = ((result << 8) & 0xFF00) + (result >> 8)
     return result
 
-  def readS16(self, register, little_endian=True):
-    """Read a signed 16-bit value from the specified register, with the
-    specified endianness (default little endian, or least significant byte
-    first)."""
-    result = self.readU16(register, little_endian)
+  def readS16(self, register):
+    """Read a signed 16-bit value from the specified register"""
+    result = self.readU16(register)
     if result > 32767:
       result -= 65536
     return result
-
-  def readU16LE(self, register):
-    """Read an unsigned 16-bit value from the specified register, in little
-    endian byte order."""
-    return self.readU16(register, little_endian=True)
-
-  def readU16BE(self, register):
-    """Read an unsigned 16-bit value from the specified register, in big
-    endian byte order."""
-    return self.readU16(register, little_endian=False)
-
-  def readS16LE(self, register):
-    """Read a signed 16-bit value from the specified register, in little
-    endian byte order."""
-    return self.readS16(register, little_endian=True)
-
-  def readS16BE(self, register):
-    """Read a signed 16-bit value from the specified register, in big
-    endian byte order."""
-    return self.readS16(register, little_endian=False)
-
 
 class BME280:
   def __init__(self, mode=BME280_OSAMPLE_1, address=BME280_I2CADDR, i2c=None,
@@ -158,22 +131,22 @@ class BME280:
 
   def _load_calibration(self):
 
-    self.dig_T1 = self._device.readU16LE(BME280_REGISTER_DIG_T1)
-    self.dig_T2 = self._device.readS16LE(BME280_REGISTER_DIG_T2)
-    self.dig_T3 = self._device.readS16LE(BME280_REGISTER_DIG_T3)
+    self.dig_T1 = self._device.readU16(BME280_REGISTER_DIG_T1)
+    self.dig_T2 = self._device.readS16(BME280_REGISTER_DIG_T2)
+    self.dig_T3 = self._device.readS16(BME280_REGISTER_DIG_T3)
 
-    self.dig_P1 = self._device.readU16LE(BME280_REGISTER_DIG_P1)
-    self.dig_P2 = self._device.readS16LE(BME280_REGISTER_DIG_P2)
-    self.dig_P3 = self._device.readS16LE(BME280_REGISTER_DIG_P3)
-    self.dig_P4 = self._device.readS16LE(BME280_REGISTER_DIG_P4)
-    self.dig_P5 = self._device.readS16LE(BME280_REGISTER_DIG_P5)
-    self.dig_P6 = self._device.readS16LE(BME280_REGISTER_DIG_P6)
-    self.dig_P7 = self._device.readS16LE(BME280_REGISTER_DIG_P7)
-    self.dig_P8 = self._device.readS16LE(BME280_REGISTER_DIG_P8)
-    self.dig_P9 = self._device.readS16LE(BME280_REGISTER_DIG_P9)
+    self.dig_P1 = self._device.readU16(BME280_REGISTER_DIG_P1)
+    self.dig_P2 = self._device.readS16(BME280_REGISTER_DIG_P2)
+    self.dig_P3 = self._device.readS16(BME280_REGISTER_DIG_P3)
+    self.dig_P4 = self._device.readS16(BME280_REGISTER_DIG_P4)
+    self.dig_P5 = self._device.readS16(BME280_REGISTER_DIG_P5)
+    self.dig_P6 = self._device.readS16(BME280_REGISTER_DIG_P6)
+    self.dig_P7 = self._device.readS16(BME280_REGISTER_DIG_P7)
+    self.dig_P8 = self._device.readS16(BME280_REGISTER_DIG_P8)
+    self.dig_P9 = self._device.readS16(BME280_REGISTER_DIG_P9)
 
     self.dig_H1 = self._device.readU8(BME280_REGISTER_DIG_H1)
-    self.dig_H2 = self._device.readS16LE(BME280_REGISTER_DIG_H2)
+    self.dig_H2 = self._device.readS16(BME280_REGISTER_DIG_H2)
     self.dig_H3 = self._device.readU8(BME280_REGISTER_DIG_H3)
     self.dig_H6 = self._device.readS8(BME280_REGISTER_DIG_H7)
 
@@ -251,7 +224,6 @@ class BME280:
 
   def read_humidity(self):
     adc = self.read_raw_humidity()
-    # print 'Raw humidity = {0:d}'.format (adc)
     h = self.t_fine - 76800
     h = (((((adc << 14) - (self.dig_H4 << 20) - (self.dig_H5 * h)) +
          16384) >> 15) * (((((((h * self.dig_H6) >> 10) * (((h *
@@ -265,23 +237,14 @@ class BME280:
   @property
   def temperature(self):
     "Return the temperature in degrees."
-    t = self.read_temperature()
-    ti = t // 100
-    td = t - ti * 100
-    return "{}.{:02d}C".format(ti, td)
+    return self.read_temperature() / 100.0
 
   @property
   def pressure(self):
     "Return the temperature in hPa."
-    p = self.read_pressure() // 256
-    pi = p // 100
-    pd = p - pi * 100
-    return "{}.{:02d}hPa".format(pi, pd)
+    return self.read_pressure() / 25600.0
 
   @property
   def humidity(self):
     "Return the humidity in percent."
-    h = self.read_humidity()
-    hi = h // 1024
-    hd = h * 100 // 1024 - hi * 100
-    return "{}.{:02d}%".format(hi, hd)
+    return self.read_humidity() / 1024.0
