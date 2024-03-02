@@ -4,6 +4,7 @@ import network
 import json
 import bme280
 import persist
+import cred
 
 from mqttsimple import MQTTClient
 
@@ -40,7 +41,7 @@ try:
     wlan.ifconfig(('192.168.62.4', '255.255.255.0', '192.168.62.1', '192.168.62.5'))
     wlan.active(True)
     wlan.config(dhcp_hostname = hostname)
-    wlan.connect('Harrys Wlan', 'Hallo, weer Harry1 dus')
+    wlan.connect(cred.NETWORK, cred.PW)
 
     #print("Wait while connected")
     timo = 50
@@ -64,7 +65,7 @@ try:
         "runtime": pers.get_prev_runtime(),
         "counter": start_count }
     print(msg)
-    client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=0)
+    client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=1)
     client.disconnect()
 
     t_end = time.ticks_ms()
