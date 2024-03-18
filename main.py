@@ -11,10 +11,7 @@ from mqttsimple import MQTTClient
 def read_sensor():
     i2c = machine.I2C(0, scl=machine.Pin(22), sda=machine.Pin(21))
     sensor = bme280.BME280(i2c=i2c)
-    temperature = sensor.temperature
-    humidity = sensor.humidity
-    pressure = sensor.pressure
-    return temperature, humidity, pressure
+    return sensor.values
 
 def read_vbat():
     vbat_adc = machine.ADC(machine.Pin(35))
@@ -64,7 +61,7 @@ try:
         "rssi": wlan.status('rssi'),
         "runtime": pers.get_prev_runtime(),
         "counter": start_count }
-    print(msg)
+    #print(msg)
     client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=1)
     client.disconnect()
 
