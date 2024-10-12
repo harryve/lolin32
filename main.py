@@ -55,13 +55,13 @@ try:
     #print("MQTT connected")
     msg = {
         "temp": float("%0.1f" % temp),
-        "hum": int("%.0f" % hum),
+        "hum": float("%.1f" % hum),
         "pressure": float("%.1f" % pres),
         "vbat": float("%0.2f" % vbat),
         "rssi": wlan.status('rssi'),
         "runtime": pers.get_prev_runtime(),
         "counter": start_count }
-    #print(msg)
+    print(msg)
     client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=1)
     client.disconnect()
 

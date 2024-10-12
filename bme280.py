@@ -32,6 +32,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+# Aangepast en ontkeverd door Harry 
+
+import machine		# To run this script directly
 import time
 from ustruct import unpack, unpack_from
 from array import array
@@ -40,36 +43,20 @@ from math import *
 # BME280 default address.
 BME280_I2CADDR = 0x76
 
-# Operating Modes
+# Operating Mode
 BME280_OSAMPLE_1 = 1
-BME280_OSAMPLE_2 = 2
-BME280_OSAMPLE_4 = 3
-BME280_OSAMPLE_8 = 4
-BME280_OSAMPLE_16 = 5
 
+# BME280 registers
 BME280_REGISTER_CONTROL_HUM = 0xF2
 BME280_REGISTER_CONTROL = 0xF4
-
+BME280_REGISTER_CONFIG = 0xf5
 
 class BME280:
 
-    def __init__(self,
-                 mode=BME280_OSAMPLE_1,
-                 address=BME280_I2CADDR,
-                 i2c=None,
-                 **kwargs):
-        # Check that mode is valid.
-        if mode not in [BME280_OSAMPLE_1, BME280_OSAMPLE_2, BME280_OSAMPLE_4,
-                        BME280_OSAMPLE_8, BME280_OSAMPLE_16]:
-            raise ValueError(
-                'Unexpected mode value {0}. Set mode to one of '
-                'BME280_ULTRALOWPOWER, BME280_STANDARD, BME280_HIGHRES, or '
-                'BME280_ULTRAHIGHRES'.format(mode))
-        self._mode = mode
-        self.address = address
-        if i2c is None:
-            raise ValueError('An I2C object is required.')
+    def __init__(self, i2c):
         self.i2c = i2c
+        self._mode = BME280_OSAMPLE_1
+        self.address = BME280_I2CADDR
 
         # load calibration data
         dig_88_a1 = self.i2c.readfrom_mem(self.address, 0x88, 26)
@@ -85,19 +72,11 @@ class BME280:
 
         e6_sign = unpack_from("<b", dig_e1_e7, 5)[0]
         self.dig_H5 = (e6_sign << 4) | (dig_e1_e7[4] >> 4)
-
         self.dig_H6 = unpack_from("<b", dig_e1_e7, 6)[0]
+        
+        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL, bytearray([0]))   # Sleep mode
 
-        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL,
-                             bytearray([0x3F]))
-        self.t_fine = 0
-
-        # temporary data holders which stay allocated
-        self._l1_barray = bytearray(1)
-        self._l8_barray = bytearray(8)
-        self._l3_resultarray = array("i", [0, 0, 0])
-
-    def read_raw_data(self, result):
+    def read_raw_data(self): #, result):
         """ Reads the raw (uncompensated) data from the sensor.
 
             Args:
@@ -106,56 +85,42 @@ class BME280:
             Returns:
                 None
         """
+        regval = bytearray(1)
+        regval[0] = self._mode
+        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL_HUM, regval) #self._l1_barray)
+        regval[0] = self._mode << 5 | self._mode << 2 | 1           # Forced mode
+        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL, regval) #self._l1_barray)
 
-        self._l1_barray[0] = self._mode
-        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL_HUM,
-                             self._l1_barray)
-        self._l1_barray[0] = self._mode << 5 | self._mode << 2 | 1
-        self.i2c.writeto_mem(self.address, BME280_REGISTER_CONTROL,
-                             self._l1_barray)
-
-        sleep_time = 1250 + 2300 * (1 << self._mode)
-        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
-        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575
+        # Calculate the worst case measurement time
+        sleep_time = 1250 + 2300 * (1 << self._mode)                # Temperature
+        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575    # Pressure
+        sleep_time = sleep_time + 2300 * (1 << self._mode) + 575    # Humidity
         time.sleep_us(sleep_time)  # Wait the required time
 
         # burst readout from 0xF7 to 0xFE, recommended by datasheet
-        self.i2c.readfrom_mem_into(self.address, 0xF7, self._l8_barray)
-        readout = self._l8_barray
-        # pressure(0xF7): ((msb << 16) | (lsb << 8) | xlsb) >> 4
+        readout = bytearray(8)
+        self.i2c.readfrom_mem_into(self.address, 0xF7, readout)
         raw_press = ((readout[0] << 16) | (readout[1] << 8) | readout[2]) >> 4
-        # temperature(0xFA): ((msb << 16) | (lsb << 8) | xlsb) >> 4
         raw_temp = ((readout[3] << 16) | (readout[4] << 8) | readout[5]) >> 4
-        # humidity(0xFD): (msb << 8) | lsb
         raw_hum = (readout[6] << 8) | readout[7]
-
-        result[0] = raw_temp
-        result[1] = raw_press
-        result[2] = raw_hum
-
-    def read_compensated_data(self, result=None):
+        return raw_temp, raw_press, raw_hum
+    
+    def read_compensated_data(self):
         """ Reads the data from the sensor and returns the compensated data.
 
-            Args:
-                result: array of length 3 or alike where the result will be
-                stored, in temperature, pressure, humidity order. You may use
-                this to read out the sensor without allocating heap memory
-
-            Returns:
-                array with temperature, pressure, humidity. Will be the one from
-                the result parameter if not None
+             Returns:
+                Tuple with temperature, pressure, humidity
         """
-        self.read_raw_data(self._l3_resultarray)
-        raw_temp, raw_press, raw_hum = self._l3_resultarray
+        raw_temp, raw_press, raw_hum = self.read_raw_data()
         # temperature
-        var1 = ((raw_temp >> 3) - (self.dig_T1 << 1)) * (self.dig_T2 >> 11)
+        var1 = ((raw_temp >> 3) - (self.dig_T1 << 1)) * self.dig_T2 >> 11
         var2 = (((((raw_temp >> 4) - self.dig_T1) *
                   ((raw_temp >> 4) - self.dig_T1)) >> 12) * self.dig_T3) >> 14
-        self.t_fine = var1 + var2
-        temp = (self.t_fine * 5 + 128) >> 8
+        t_fine = var1 + var2
+        temp = (t_fine * 5 + 128) >> 8
 
         # pressure
-        var1 = self.t_fine - 128000
+        var1 = t_fine - 128000
         var2 = var1 * var1 * self.dig_P6
         var2 = var2 + ((var1 * self.dig_P5) << 17)
         var2 = var2 + (self.dig_P4 << 35)
@@ -172,7 +137,7 @@ class BME280:
             pressure = ((p + var1 + var2) >> 8) + (self.dig_P7 << 4)
 
         # humidity
-        h = self.t_fine - 76800
+        h = t_fine - 76800
         h = (((((raw_hum << 14) - (self.dig_H4 << 20) -
                 (self.dig_H5 * h)) + 16384)
               >> 15) * (((((((h * self.dig_H6) >> 10) *
@@ -183,13 +148,7 @@ class BME280:
         h = 419430400 if h > 419430400 else h
         humidity = h >> 12
 
-        if result:
-            result[0] = temp
-            result[1] = pressure
-            result[2] = humidity
-            return result
-
-        return array("i", (temp, pressure, humidity))
+        return temp, pressure, humidity
 
     @property
     def values(self):
@@ -205,4 +164,11 @@ class BME280:
         hd = h * 100 // 1024 - hi * 100
         #print("{}C".format(t / 100), "{}.{:02d}%".format(hi, hd), "{}.{:02d}hPa".format(pi, pd))
     
-        return t / 100, int(round(h / 1024)) , int(round(p / 25600))
+        return t / 100, h / 1024 , p / 25600.0
+
+if __name__ == "__main__":
+    i2c = machine.I2C(scl=machine.Pin(13), sda=machine.Pin(12))
+    sensor = BME280(i2c=i2c)
+    while True:
+        print(sensor.values)
+        time.sleep(5)
