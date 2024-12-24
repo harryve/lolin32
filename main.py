@@ -63,6 +63,7 @@ try:
         "counter": start_count }
     #print(msg)
     client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=0)
+    time.sleep(.1)
     client.disconnect()
 
     t_end = time.ticks_ms()
