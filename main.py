@@ -61,8 +61,8 @@ try:
         "rssi": wlan.status('rssi'),
         "runtime": pers.get_prev_runtime(),
         "counter": start_count }
-    print(msg)
-    client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=1)
+    #print(msg)
+    client.publish("tele/%s/sensor" % hostname, json.dumps(msg, separators=(',', ':')), qos=0)
     client.disconnect()
 
     t_end = time.ticks_ms()
